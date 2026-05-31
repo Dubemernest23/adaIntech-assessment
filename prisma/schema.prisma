@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum NotificationChannel {
+  email
+  sms
+  in_app
+}
+
+enum NotificationCategory {
+  compliance
+  billing
+  engagement
+  system
+}
+
+enum DeliveryMode {
+  realtime
+  daily_digest
+}
+
+model NotificationPreference {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  tenantId        String   @map("tenant_id")
+  emailEnabled    Boolean  @default(true) @map("email_enabled")
+  smsEnabled      Boolean  @default(false) @map("sms_enabled")
+  inAppEnabled    Boolean  @default(true) @map("in_app_enabled")
+  quietHoursStart String?  @map("quiet_hours_start")
+  quietHoursEnd   String?  @map("quiet_hours_end")
+  timezone        String   @default("UTC")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  categories NotificationCategoryPreference[]
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId, tenantId])
+  @@map("notification_preferences")
+}
+
+model NotificationCategoryPreference {
+  id           String               @id @default(uuid())
+  preferenceId String               @map("preference_id")
+  tenantId     String               @map("tenant_id")
+  category     NotificationCategory
+  enabled      Boolean              @default(true)
+  deliveryMode DeliveryMode         @default(realtime) @map("delivery_mode")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  preference NotificationPreference @relation(fields: [preferenceId], references: [id], onDelete: Cascade)
+
+  @@unique([preferenceId, category])
+  @@index([tenantId])
+  @@index([preferenceId, tenantId])
+  @@map("notification_category_preferences")
+}
