@@ -1,0 +1,56 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    container_name: abp_notification_api
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - abp_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: abp_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - abp_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: abp_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - abp_network
+
+volumes:
+  postgres_data:
+
+networks:
+  abp_network:
+    driver: bridge
