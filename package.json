@@ -42,17 +42,19 @@
     "typescript": "^6.0.3"
   },
   "name": "adaintech-assessment",
-  "version": "1.0.0",
-  "description": "assessment for the role of a backend developer at AdaIn tech",
-  "main": "index.js",
-  "scripts": {
+    "version": "1.0.0",
+    "description": "assessment for the role of a backend developer at AdaIn tech",
+    "main": "index.js",
+    "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:migrate": "npx prisma migrate deploy && node dist/server.js",
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "seed": "prisma db seed"
   },
   "prisma": {
     "seed": "ts-node src/database/seed.ts"

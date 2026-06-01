@@ -2,14 +2,17 @@ import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
 import { requestIdMiddleware } from './middleware/requestid.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
 import { appConfig } from './config';
 import { logger } from './shared/logger/pino.logger';
 import { HTTP_STATUS } from './shared/constants';
+import notificationRoutes from './modules/notifications/notification.routes';
+import healthRoutes from './modules/health/health.route';
+import { swaggerSpec } from './config/swagger.config';
 
 const app: Application = express();
-
 
 app.use(helmet());
 app.use(cors());
@@ -24,15 +27,18 @@ app.use(
   }),
 );
 
+// Swagger docs
+app.use(
+  '/api/v1/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: 'ABP Notification Service API',
+  }),
+);
 
-app.use('/api/v1/health', (req: Request, res: Response) => {
-  res.status(HTTP_STATUS.OK).json({
-    success: true,
-    message: 'Service is healthy',
-    timestamp: new Date().toISOString(),
-    environment: appConfig.env,
-  });
-});
+// Routes
+app.use('/api/v1/health', healthRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
