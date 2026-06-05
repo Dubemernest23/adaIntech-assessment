@@ -27,20 +27,17 @@ export const authenticate = (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError(
-        'No token provided',
-        HTTP_STATUS.UNAUTHORIZED,
-      );
+      throw new AppError('No token provided', HTTP_STATUS.UNAUTHORIZED);
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, jwtConfig.secret) as JwtPayload;
+
+    const decoded = jwt.verify(token, jwtConfig.publicKey, { // Ensure the token is signed with the expected algorithm
+      algorithms: [jwtConfig.algorithm],
+    }) as JwtPayload;
 
     if (!decoded.user_id || !decoded.tenant_id || !decoded.role) {
-      throw new AppError(
-        'Invalid token claims',
-        HTTP_STATUS.UNAUTHORIZED,
-      );
+      throw new AppError('Invalid token claims', HTTP_STATUS.UNAUTHORIZED);
     }
 
     req.user = decoded;

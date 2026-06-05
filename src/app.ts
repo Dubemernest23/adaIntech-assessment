@@ -11,6 +11,7 @@ import { HTTP_STATUS } from './shared/constants';
 import notificationRoutes from './modules/notifications/notification.routes';
 import healthRoutes from './modules/health/health.route';
 import { swaggerSpec } from './config/swagger.config';
+import eventRoutes from './modules/events/event.routes';
 
 const app: Application = express();
 
@@ -38,7 +39,12 @@ app.use(
 
 // Routes
 app.use('/api/v1/health', healthRoutes);
+app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+// Temporary test route
+app.post('/test', (req, res) => {
+  res.json({ ok: true });
+});
 
 // 404 handler
 app.use((req: Request, res: Response) => {
