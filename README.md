@@ -198,3 +198,91 @@ Daily digest notifications are processed via BullMQ backed by Redis:
 3. **One preference record per user per tenant** — a user cannot have multiple preference profiles within the same tenant.
 4. **Quiet hours are stored as strings** (`HH:MM` format) — timezone-aware scheduling would be handled by the delivery layer using the stored `timezone` field.
 5. **Daily digest scheduling is per-tenant** — in production, scheduling would be triggered during tenant onboarding.
+
+
+---
+
+## NEOS — Notification Execution and Orchestration System
+
+### Quick Start (Task 2)
+
+The service now includes NEOS on top of the Task 1 preference storage layer. To run:
+
+```bash
+# Start infrastructure
+docker compose up postgres redis -d
+
+# Run migrations
+npx prisma migrate dev
+
+# Seed two tenants
+npm run seed
+
+# Generate RS256 test tokens
+npx ts-node generate-token.ts
+
+# Start server
+npm run dev
+```
+
+API docs available at `http://localhost:3000/api/v1/docs`
+
+---
+---
+
+### Architectural Decisions
+
+#### Decision 1 — Event Ingestion via HTTP Endpoint
+
+**What was decided:** Events are ingested via a `POST /api/v1/events` HTTP endpoint rather than a BullMQ consumer queue.
+
+**Rationale:** An HTTP endpoint fits naturally into the existing Express architecture and keeps the ingestion contract explicit and synchronous at the boundary. The caller receives an immediate acknowledgement — `201 Accepted` for new events, `200` for duplicates — which makes idempotency straightforward to test and reason about. A BullMQ consumer queue would require a separate publisher, adding infrastructure complexity without meaningful benefit at this stage since ABP Connect verticals are HTTP-native services.
+
+**Trade-offs acknowledged:** An HTTP endpoint couples the producer to the availability of this service. If NEOS is down, the producer receives an error. A queue-based approach would allow producers to publish regardless of consumer availability. In a high-throughput production system, a message queue (Kafka, RabbitMQ, or BullMQ with a dedicated publisher) would be the correct choice. The HTTP approach is the right starting point for this stage of the system.
+
+---
+
+#### Decision 2 — Idempotency via Database Unique Constraint
+
+**What was decided:** Idempotency is enforced by a `@unique` constraint on the `eventId` column in the `incoming_events` table, backed by an application-level check in `EventService.ingestEvent()`.
+
+**Rationale:** The application-level check provides a fast, readable path for duplicate detection — if the `eventId` already exists, the service returns immediately without touching the orchestrator. The database constraint provides a second layer of defence: even if two requests arrive simultaneously and both pass the application check, the database will reject the second insert. This two-layer approach means idempotency survives race conditions, Redis restarts, and application crashes. An in-memory set or Redis-based lock would not survive a process restart.
+
+**Trade-offs acknowledged:** The database check adds one query per ingestion request. At high throughput this could become a bottleneck. A Redis-based idempotency key with a TTL would be faster but introduces a dependency on Redis availability and a time window within which duplicates could slip through after a Redis restart. The database approach trades marginal latency for correctness guarantees.
+
+---
+
+#### Decision 3 — What I Would Change Given Additional Time
+
+**The decision:** The orchestration flow is currently fire-and-forget — `EventService` triggers `OrchestratorService.orchestrate()` without awaiting it, catching errors only in a `.catch()` handler.
+
+**Why it was made:** Separating ingestion from orchestration keeps the HTTP response time low. The caller does not wait for delivery to complete. This is architecturally correct.
+
+**What is wrong with it:** If the orchestration fails silently — for example, if the database is briefly unavailable when writing delivery records — there is no retry mechanism for the orchestration step itself. The event is marked as received but no delivery record is written. The gap is invisible unless you are actively monitoring logs.
+
+**What I would change:** I would add the orchestration step to a BullMQ queue immediately after ingestion. The queue job would handle orchestration with the existing retry and DLQ configuration. This gives orchestration the same resilience as digest delivery — three attempts with exponential backoff, failed jobs visible in the DLQ, and no silent data loss. The HTTP response would still return immediately after enqueueing, preserving the low-latency ingestion contract.
+
+---
+
+### Database Schema
+
+**New tables added in Task 2:**
+
+- **`incoming_events`** — stores every received event with idempotency enforced via unique `event_id` constraint
+- **`delivery_records`** — records every delivery attempt with status, channel, correlationId, and skipReason
+
+**Design decisions:**
+- `tenantId` duplicated on `delivery_records` to avoid joins on every tenant-scoped query
+- `processed` flag on `incoming_events` tracks pipeline completion
+- Indexes on `(userId, tenantId)` on both tables for query performance
+
+---
+
+### Failure Resilience
+
+| Scenario | Approach |
+|---|---|
+| Duplicate event | DB unique constraint + application check. Same eventId never produces more than one delivery attempt. Tested in `idempotency.test.ts`. |
+| Partial provider failure | `Promise.allSettled()` ensures all channels attempt delivery. Each outcome recorded independently. |
+| Queue unavailability | If Redis is unreachable, BullMQ connection errors are logged. Realtime delivery still proceeds via direct provider calls. Digest scheduling fails gracefully with logged errors. Documented gap: orchestration should be queued (see Decision 3). |
+| Out-of-order events | Events are processed in arrival order, not `occurredAt` order. Out-of-order arrival produces correct delivery records for each event independently. Since preference evaluation uses the current time (not `occurredAt`), a delayed event may be evaluated against different quiet hours than when it originally occurred. This is acceptable at this stage — the delivery record captures `occurredAt` for audit purposes and a deduplication window could be added in a future iteration. |
