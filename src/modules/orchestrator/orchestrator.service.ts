@@ -72,7 +72,7 @@ export class OrchestratorService {
                 deliveryMode: c.deliveryMode,
             })),
         };
-
+        
         // evaluate prefrences before handling skip
         const evaluationResult = evaluatePreferences(
             { eventType, userId, tenantId },

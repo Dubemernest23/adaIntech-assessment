@@ -7,15 +7,16 @@ const adapter = new PrismaPg({
 });
 
 const prisma = new PrismaClient({ adapter });
-
 async function main() {
   logger.info('Seeding database...');
 
+  // Clear existing data
+  await prisma.notificationCategoryPreference.deleteMany({});
+  await prisma.notificationPreference.deleteMany({});
+
   // Tenant 001
-  await prisma.notificationPreference.upsert({
-    where: { userId_tenantId: { userId: 'user-001', tenantId: 'tenant-001' } },
-    update: {},
-    create: {
+  await prisma.notificationPreference.create({
+    data: {
       userId: 'user-001',
       tenantId: 'tenant-001',
       emailEnabled: true,
@@ -27,8 +28,8 @@ async function main() {
       categories: {
         create: [
           { tenantId: 'tenant-001', category: 'compliance', enabled: true, deliveryMode: 'realtime' },
-          { tenantId: 'tenant-001', category: 'billing', enabled: true, deliveryMode: 'daily_digest' },
-          { tenantId: 'tenant-001', category: 'engagement', enabled: false, deliveryMode: 'daily_digest' },
+          { tenantId: 'tenant-001', category: 'billing', enabled: true, deliveryMode: 'realtime' },
+          { tenantId: 'tenant-001', category: 'engagement', enabled: true, deliveryMode: 'daily_digest' },
           { tenantId: 'tenant-001', category: 'system', enabled: true, deliveryMode: 'realtime' },
         ],
       },
@@ -36,10 +37,8 @@ async function main() {
   });
 
   // Tenant 002
-  await prisma.notificationPreference.upsert({
-    where: { userId_tenantId: { userId: 'user-002', tenantId: 'tenant-002' } },
-    update: {},
-    create: {
+  await prisma.notificationPreference.create({
+    data: {
       userId: 'user-002',
       tenantId: 'tenant-002',
       emailEnabled: true,
@@ -53,7 +52,7 @@ async function main() {
           { tenantId: 'tenant-002', category: 'compliance', enabled: true, deliveryMode: 'realtime' },
           { tenantId: 'tenant-002', category: 'billing', enabled: true, deliveryMode: 'realtime' },
           { tenantId: 'tenant-002', category: 'engagement', enabled: true, deliveryMode: 'daily_digest' },
-          { tenantId: 'tenant-002', category: 'system', enabled: false, deliveryMode: 'realtime' },
+          { tenantId: 'tenant-002', category: 'system', enabled: true, deliveryMode: 'realtime' },
         ],
       },
     },

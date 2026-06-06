@@ -1,6 +1,7 @@
 import { NotificationProvider } from './provider.interface';
 import { MockEmailProvider } from './mock-email.provider';
 import { MockSmsProvider } from './mock-sms.provider';
+import { MockInAppProvider } from './mock-inapp.provider';
 
 type Channel = 'email' | 'sms'  |'in_app'
 
@@ -11,6 +12,7 @@ export class ProviderRegistry {
         this.providers = new Map();
         this.register(new MockEmailProvider());
         this.register(new MockSmsProvider());
+        this.register(new MockInAppProvider());
     }
 
     private register(provider: NotificationProvider): void {

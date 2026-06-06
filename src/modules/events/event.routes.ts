@@ -3,6 +3,8 @@ import { EventController } from './event.controller';
 import { authenticate } from '../../middleware/auth.middleware';
 import { validate } from '../../middleware/validation.middleware';
 import { incomingEventSchema } from './event.validation';
+import { createTenantRateLimit } from '../../middleware/rate-limit.middleware';
+
 
 const router = Router();
 const controller = new EventController();
@@ -62,9 +64,11 @@ const controller = new EventController();
  *       422:
  *         description: Validation failed
  */
+
 router.post(
   '/',
   authenticate,
+  createTenantRateLimit,
   validate(incomingEventSchema),
   controller.ingestEvent,
 );

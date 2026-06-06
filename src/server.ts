@@ -3,7 +3,7 @@ dotenv.config();
 
 import app from './app';
 import { appConfig } from './config';
-import { connectDatabase, disconnectDatabase } from './database/prisma.client';
+import { connectDatabase, disconnectDatabase, prisma } from './database/prisma.client';
 import { logger } from './shared/logger/pino.logger';
 import { startNotificationWorker } from './modules/notifications/jobs/notification.worker';
 import { scheduleDailyDigest } from './modules/notifications/jobs/digest.job';
@@ -12,11 +12,20 @@ import { Worker } from 'bullmq';
 const startServer = async (): Promise<void> => {
   try {
     await connectDatabase();
+
     const worker: Worker = startNotificationWorker();
 
-    // Schedule daily digest for default tenant
-    // In production this would be done per tenant on onboarding
-    await scheduleDailyDigest('tenant-001');
+    // Schedule daily digest for all tenants in the database
+    // In production this would also be triggered at tenant onboarding
+    const tenants = await prisma.notificationPreference.findMany({
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+
+    for (const { tenantId } of tenants) {
+      await scheduleDailyDigest(tenantId);
+      logger.info({ tenantId }, 'Daily digest scheduled for tenant');
+    }
 
     const server = app.listen(appConfig.port, () => {
       logger.info(

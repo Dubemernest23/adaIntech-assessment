@@ -19,3 +19,12 @@ export const digestQueue = new Queue(QUEUE_NAMES.DIGEST, {
     removeOnFail: false,
   },
 });
+
+export const dlqQueue = new Queue(QUEUE_NAMES.DLQ, {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: false,
+    removeOnFail: false,
+  },
+});
