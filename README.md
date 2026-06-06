@@ -228,6 +228,22 @@ npm run dev
 API docs available at `http://localhost:3000/api/v1/docs`
 
 ---
+
+### Requirements Compliance (R1–R10)
+
+| Ref | Requirement | Implementation |
+|---|---|---|
+| R1 | Automated Tests | Jest unit and integration tests. 48 tests across 6 suites. 72.72% function coverage, 84.74% branch coverage. No live DB or Redis required. |
+| R2 | Idempotent Event Processing | `eventId` unique constraint at DB level. Application-level check in `EventService.ingestEvent()`. Duplicate returns 200 without triggering orchestration. Demonstrated in `idempotency.test.ts`. |
+| R3 | Tenant Isolation | Every DB query scoped by `tenantId` from JWT. Delivery history endpoint enforces tenant scope. Cross-tenant access demonstrated impossible in `tenant-isolation.test.ts`. |
+| R4 | Provider Interface | `NotificationProvider` interface in `provider.interface.ts`. Three mock adapters: `MockEmailProvider`, `MockSmsProvider`, `MockInAppProvider`. No provider logic in orchestration code. |
+| R5 | Delivery Tracking | Every delivery attempt — sent, failed, skipped, queued — writes a `DeliveryRecord` with `correlationId`. Implemented in `DeliveryRepository.createRecord()`. |
+| R6 | Quiet Hours Enforcement | `isInQuietHours()` in evaluation engine handles overnight windows. Skipped events recorded with `skipReason: quiet_hours`. |
+| R7 | Partial Failure Handling | `Promise.allSettled()` in orchestrator ensures all channels attempt delivery independently. Each outcome recorded separately. |
+| R8 | Per-Tenant Rate Limiting | `express-rate-limit` middleware keyed by `tenant_id` from JWT. Applied to event ingestion endpoint. 100 requests per 15-minute window per tenant. |
+| R9 | Architectural Decision Notes | See section below. |
+| R10 | RS256 JWT | HS256 replaced with RS256. Private key signs tokens. Public key verifies. Key pair in `src/keys/` as test fixtures only. |
+
 ---
 
 ### Architectural Decisions
