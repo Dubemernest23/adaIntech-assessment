@@ -13,10 +13,12 @@ export const DEFAULT_TIMEZONE = 'UTC';
 
 export const QUEUE_NAMES = {
   DIGEST: 'digest-notifications',
+  DLQ: 'dead-letter-queue',
 } as const;
 
 export const JOB_NAMES = {
   SEND_DIGEST: 'send-daily-digest',
+  DLQ_EVENT: 'dlq-failed-event',
 } as const;
 
 export const HTTP_STATUS = {
