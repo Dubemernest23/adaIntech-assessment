@@ -1,5 +1,14 @@
+import { DeliveryStatus } from '@prisma/client';
 import { prisma } from '../../database/prisma.client';
-import { CreateDeliveryRecordInput } from './delivery.types';
+import { CreateDeliveryRecordInput, DeliveryStatusEnum } from './delivery.types';
+
+const STATUS_MAP: Record<DeliveryStatusEnum, DeliveryStatus>={
+    sent: DeliveryStatus.sent,
+    failed: DeliveryStatus.failed,
+    skipped: DeliveryStatus.skipped,
+    queued: DeliveryStatus.queued
+};
+
 
 export class DeliveryRepository {
     async createRecord(data: CreateDeliveryRecordInput) {
@@ -9,7 +18,7 @@ export class DeliveryRepository {
                 userId: data.userId,
                 tenantId: data.tenantId,
                 channel: data.channel,
-                status: data.status as any,
+                status: STATUS_MAP[data.status],
                 skipReason: data.skipReason,
                 correlationId: data.correlationId,
             },

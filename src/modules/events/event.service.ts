@@ -3,8 +3,6 @@ import {IncomingEventInput} from "./event.validation";
 import {EventIngestionResult} from "./event.types";
 import { logger } from '../../shared/logger/pino.logger';
 import { OrchestratorService } from "../orchestrator/orchestrator.service";
-import { da } from "zod/v4/locales";
-
 
 export class EventService {
     private repository: EventRepository;
