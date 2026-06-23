@@ -1,5 +1,3 @@
-import { HTTP_STATUS } from '../shared/constants';
-import { AppError } from '../shared/errors/app.error';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,7 +9,10 @@ const loadKey = (filePath: string, fallback: string): string => {
     return fs.readFileSync(filePath, 'utf8');
   } catch {
     throw new Error(
-      `RSA key not found at ${filePath}. Run: npm run generate:keys`,
+      `RSA key not found at ${filePath}.\n` +
+        `Generate the key pair before starting the server:\n` +
+        `  Linux / macOS : npm run generate:keys\n` +
+        `  Windows       : npm run generate:keys:win\n`,
     );
   }
 };

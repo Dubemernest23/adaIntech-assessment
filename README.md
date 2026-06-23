@@ -37,6 +37,27 @@ A multi-tenant notification preference management service built with Express.js 
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - Node.js 22+ (for local development only)
+- OpenSSL (required for RSA key generation — see below)
+
+---
+
+## RSA Key Generation (required before first run)
+
+NEOS uses RS256 JWT signing. The server will refuse to start if the key pair is missing. Run **one** of the following commands from the project root after cloning:
+
+**Linux / macOS**
+```bash
+npm run generate:keys
+```
+
+**Windows (PowerShell)**
+```powershell
+npm run generate:keys:win
+```
+
+Both commands create `src/keys/private.key` and `src/keys/public.key`. These files are excluded from version control (`.gitignore`) and must be generated locally on every clean clone.
+
+> **OpenSSL on Windows:** OpenSSL ships with [Git for Windows](https://git-scm.com/downloads) and is on `PATH` inside a Git Bash terminal. If you are using a plain PowerShell or CMD prompt and `openssl` is not found, either run the command inside Git Bash or [install OpenSSL for Windows](https://slproweb.com/products/Win32OpenSSL.html) and add it to `PATH`.
 
 ---
 
@@ -47,10 +68,14 @@ A multi-tenant notification preference management service built with Express.js 
 git clone https://github.com/Dubemernest23/adaIntech-assessment.git
 cd adaIntech-assessment
 
-# 2. Create environment file
+# 2. Generate RSA keys (see section above)
+npm run generate:keys          # Linux / macOS
+# npm run generate:keys:win    # Windows
+
+# 3. Create environment file
 cp .env.example .env.docker
 
-# 3. Start all services
+# 4. Start all services
 docker compose up --build
 ```
 
@@ -64,24 +89,44 @@ The API will be available at `http://localhost:3000`
 # 1. Install dependencies
 npm install
 
-# 2. Create local environment file
+# 2. Generate RSA keys (see section above — skip if already done)
+npm run generate:keys          # Linux / macOS
+# npm run generate:keys:win    # Windows
+
+# 3. Create local environment file
 cp .env.example .env
 
-# 3. Start Postgres and Redis only
+# 4. Start Postgres and Redis only
 docker compose up postgres redis -d
 
-# 4. Run database migrations
+# 5. Run database migrations
 npx prisma migrate dev
 
-# 5. Generate Prisma client
+# 6. Generate Prisma client
 npx prisma generate
 
-# 6. Seed the database (optional)
+# 7. Seed the database (optional)
 npm run seed
 
-# 7. Start development server
+# 8. Start development server
 npm run dev
 ```
+
+---
+
+## Running Tests
+
+Tests run entirely in-memory — no running database or Redis instance is required.
+
+```bash
+# Run all tests (serial, ensures clean exit)
+npm test -- --runInBand
+
+# Run with coverage report
+npm run test:coverage -- --runInBand
+```
+
+> `--runInBand` is recommended to avoid port conflicts and to guarantee a clean process exit after all suites complete.
 
 ---
 
@@ -198,7 +243,6 @@ Daily digest notifications are processed via BullMQ backed by Redis:
 3. **One preference record per user per tenant** — a user cannot have multiple preference profiles within the same tenant.
 4. **Quiet hours are stored as strings** (`HH:MM` format) — timezone-aware scheduling would be handled by the delivery layer using the stored `timezone` field.
 5. **Daily digest scheduling is per-tenant** — in production, scheduling would be triggered during tenant onboarding.
-
 
 ---
 
