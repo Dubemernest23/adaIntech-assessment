@@ -1,3 +1,5 @@
+import { orchestrationQueue } from '../shared/queues/queue.config';
+
 // Environment – must be set before any module is imported
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
@@ -17,6 +19,11 @@ jest.mock('../shared/queues/queue.config', () => ({
     add: jest.fn().mockResolvedValue({ id: 'mock-job-id' }),
     close: jest.fn().mockResolvedValue(undefined),
     obliterate: jest.fn().mockResolvedValue(undefined),
+  },
+  orchestrationQueue: {
+    add: jest.fn().mockResolvedValue({id: 'mock-orchestration-id'}),
+    close: jest.fn().mockResolvedValue(undefined),
+    obliterate: jest.fn().mockResolvedValue(undefined)
   },
   dlqQueue: {
     add: jest.fn().mockResolvedValue({ id: 'mock-dlq-job-id' }),

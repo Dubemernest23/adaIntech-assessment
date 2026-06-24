@@ -20,6 +20,19 @@ export const digestQueue = new Queue(QUEUE_NAMES.DIGEST, {
   },
 });
 
+export const orchestrationQueue = new Queue(QUEUE_NAMES.ORCHESTRATION, {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    removeOnComplete: true,
+    removeOnFail: false,
+  },
+});
+
 export const dlqQueue = new Queue(QUEUE_NAMES.DLQ, {
   connection,
   defaultJobOptions: {

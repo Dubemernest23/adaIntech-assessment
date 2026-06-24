@@ -2,16 +2,14 @@ import {EventRepository} from "./event.repo";
 import {IncomingEventInput} from "./event.validation";
 import {EventIngestionResult} from "./event.types";
 import { logger } from '../../shared/logger/pino.logger';
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { orchestrationQueue } from '../../shared/queues/queue.config';
+import { JOB_NAMES } from "../../shared/constants";
 
 export class EventService {
-    private repository: EventRepository;
-    private orchestrator: OrchestratorService
-
-    constructor() {
-        this.repository = new EventRepository();
-        this.orchestrator = new OrchestratorService()
-    }
+    
+    constructor(
+        private readonly repository = new EventRepository()
+    ) {}
 
     async ingestEvent(data: IncomingEventInput,correlationId: string): Promise<EventIngestionResult> {
         // Idempotency check and ensure event is not processed multiple times
@@ -41,29 +39,18 @@ export class EventService {
             'Event ingested successfully',
         );
 
-        // trigger orchestration asychronously and don't await this because ingestion and orchestration
-        // are seperate concerns 
         if (data.userId) {
-            this.orchestrator.orchestrate({
-                eventId: data.eventId,
-                eventType: data.eventType,
-                userId: data.userId,
-                tenantId: data.tenantId,
-                payload: data.payload,
-                correlationId,
-            }).catch((error) =>{
-                logger.error(
-                    {
-                        eventId: data.eventId,
-                        error: error.message,
-                        correlationId
-                    },
-                    "Orchestration failed"
-                );
-            });
+            await orchestrationQueue.add(JOB_NAMES.ORCHESTRATE,{
+                
+                    eventId: data.eventId,
+                    eventType: data.eventType,
+                    userId: data.userId,
+                    tenantId: data.tenantId,
+                    payload: data.payload,
+                    correlationId,
+                
+            })            
         }
-
-
 
         return {
             eventId: event.eventId,
