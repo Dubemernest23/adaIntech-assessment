@@ -9,6 +9,7 @@ import { startNotificationWorker } from './modules/notifications/jobs/notificati
 import { scheduleDailyDigest } from './modules/notifications/jobs/digest.job';
 import { Worker } from 'bullmq';
 import { startOrchestrationWorker } from './modules/orchestrator/orchestrator.worker';
+import { recoverOrphanedEvents } from './modules/events/event.recovery';
 
 const startServer = async (): Promise<void> => {
   try {
@@ -16,6 +17,8 @@ const startServer = async (): Promise<void> => {
 
     const worker: Worker = startNotificationWorker();
     const orchestrationWorker: Worker = startOrchestrationWorker()
+
+    await recoverOrphanedEvents();
 
     // Schedule daily digest for all tenants in the database
     // In production this would also be triggered at tenant onboarding

@@ -4,7 +4,7 @@ import { QUEUE_NAMES, JOB_NAMES } from "../../shared/constants";
 import { logger } from "../../shared/logger/pino.logger";
 import { dlqQueue } from "../../shared/queues/queue.config";
 import { OrchestratorService } from "./orchestrator.service";
-
+import { EventRepository } from "../events/event.repo";
 
 export const startOrchestrationWorker = (): Worker =>{
     const worker = new Worker(
@@ -36,7 +36,15 @@ export const startOrchestrationWorker = (): Worker =>{
 
 export const processOrchestration = async (job: Job): Promise<void> => {
     const orchestratorService = new OrchestratorService();
+    const eventRepo = new EventRepository();
+
     await orchestratorService.orchestrate(job.data);
+    // mark event as completed
+    await eventRepo.updateOrchestrationStatus(job.data.eventId, 'COMPLETED');
+    logger.info(
+        {eventId: job.data.eventId, jobId: job.id},
+        'Orchestration completed - event marked COMPLETED'
+    )
 };
 
 export const onFailedHandler = async (job: Job | undefined, error: Error): Promise<void> => {
@@ -48,5 +56,14 @@ export const onFailedHandler = async (job: Job | undefined, error: Error): Promi
             error: error.message,
             failedAt: new Date().toISOString(),
         });
+
+        logger.error(
+            {
+                eventId: job.data.eventId,
+                jobId: job.id,
+                error: error.message,
+            },
+            'Orchestration job exhausted retries — sent to DLQ',
+        );
     }
 };

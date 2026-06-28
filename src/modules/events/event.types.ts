@@ -7,7 +7,7 @@ export interface IncomingEventDto {
   eventId: string;
   eventType: EventTypeEnum;
   tenantId: string;
-  userId?: string;
+  userId: string;
   productLine: ProductLineEnum;
   schemaVersion: string;
   payload: Record<string, unknown>;
@@ -18,4 +18,13 @@ export interface EventIngestionResult {
   eventId: string;
   status: 'accepted' | 'duplicate';
   message: string;
+}
+
+export interface OrchestrationJob {
+    eventId: string;
+    eventType: string;
+    userId: string;
+    tenantId: string;
+    payload: Record<string, unknown>;
+    correlationId: string;
 }
