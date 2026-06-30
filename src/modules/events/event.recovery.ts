@@ -4,12 +4,17 @@ import { JOB_NAMES } from '../../shared/constants';
 import { logger } from '../../shared/logger/pino.logger';
 
 export const recoverOrphanedEvents = async (): Promise<void> => {
+
     const orphaned = await prisma.incomingEvent.findMany({
         where: {
-        orchestrationStatus: { in: ['PENDING', 'ENQUEUE_FAILED'] as any },
-        receivedAt: { lt: new Date(Date.now() - 60 * 1000) },
+            // Only PENDING and ENQUEUE_FAILED are recoverable.
+            // FAILED is terminal — the job already exhausted retries and is in the DLQ.
+            // COMPLETED and QUEUED are not orphaned.
+            orchestrationStatus: { in: ['PENDING', 'ENQUEUE_FAILED'] as any },
+            receivedAt: { lt: new Date(Date.now() - 60 * 1000) },
         },
     });
+
 
     if (orphaned.length === 0) {
         logger.info('Startup recovery: no orphaned events found');

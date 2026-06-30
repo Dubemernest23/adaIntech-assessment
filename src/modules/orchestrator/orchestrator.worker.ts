@@ -47,15 +47,26 @@ export const processOrchestration = async (job: Job): Promise<void> => {
     )
 };
 
-export const onFailedHandler = async (job: Job | undefined, error: Error): Promise<void> => {
+export const onFailedHandler = async (
+  job: Job | undefined,
+  error: Error,
+): Promise<void> => {
     if (job && job.attemptsMade >= 3) {
-        await dlqQueue.add(JOB_NAMES.DLQ_EVENT, {
-            eventId: job.data.eventId,
-            tenantId: job.data.tenantId,
-            correlationId: job.data.correlationId,
-            error: error.message,
-            failedAt: new Date().toISOString(),
-        });
+        const eventRepository = new EventRepository();
+
+        await dlqQueue.add(
+            JOB_NAMES.DLQ_EVENT,
+            {
+                eventId: job.data.eventId,
+                tenantId: job.data.tenantId,
+                correlationId: job.data.correlationId,
+                error: error.message,
+                failedAt: new Date().toISOString(),
+            },
+        );
+
+        // Mark as terminal FAILED state — recovery must never touch this again
+        await eventRepository.updateOrchestrationStatus(job.data.eventId, 'FAILED');
 
         logger.error(
             {
@@ -63,7 +74,7 @@ export const onFailedHandler = async (job: Job | undefined, error: Error): Promi
                 jobId: job.id,
                 error: error.message,
             },
-            'Orchestration job exhausted retries — sent to DLQ',
+            'Orchestration job exhausted retries — sent to DLQ and marked FAILED',
         );
     }
 };

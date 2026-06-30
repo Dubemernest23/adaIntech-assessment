@@ -26,7 +26,7 @@ export class EventRepository {
 
   async updateOrchestrationStatus(
     eventId: string,
-    status: 'PENDING' | 'QUEUED' | 'COMPLETED' | 'ENQUEUE_FAILED'
+    status: 'PENDING' | 'QUEUED' | 'COMPLETED' | 'ENQUEUE_FAILED' | 'FAILED'
   ) {
     return prisma.incomingEvent.update({
       where: {eventId},

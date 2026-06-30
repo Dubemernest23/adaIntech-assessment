@@ -50,6 +50,7 @@ enum OrchestrationStatus {
   QUEUED
   COMPLETED
   ENQUEUE_FAILED
+  FAILED
 }
 
 model NotificationPreference {
