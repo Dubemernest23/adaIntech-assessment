@@ -45,6 +45,14 @@ enum EventType {
   system_alert        @map("system.alert")
 }
 
+enum OrchestrationStatus {
+  PENDING
+  QUEUED
+  COMPLETED
+  ENQUEUE_FAILED
+  FAILED
+}
+
 model NotificationPreference {
   id              String   @id @default(uuid())
   userId          String   @map("user_id")
@@ -89,19 +97,21 @@ model IncomingEvent {
   eventId       String    @unique @map("event_id")
   eventType     EventType @map("event_type")
   tenantId      String    @map("tenant_id")
-  userId        String?   @map("user_id")
+  userId        String   @map("user_id")
   productLine   ProductLine @map("product_line")
   schemaVersion String    @map("schema_version")
   payload       Json
   occurredAt    DateTime  @map("occurred_at")
   receivedAt    DateTime  @default(now()) @map("received_at")
-  processed     Boolean   @default(false)
+  orchestrationStatus OrchestrationStatus @default(PENDING) @map("orchestration_status")
+
 
   deliveryRecords DeliveryRecord[]
 
   @@index([eventId])
   @@index([tenantId])
   @@index([userId, tenantId])
+  @@index([orchestrationStatus])
   @@map("incoming_events")
 }
 

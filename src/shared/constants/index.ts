@@ -14,11 +14,13 @@ export const DEFAULT_TIMEZONE = 'UTC';
 export const QUEUE_NAMES = {
   DIGEST: 'digest-notifications',
   DLQ: 'dead-letter-queue',
+  ORCHESTRATION: 'orchestration'
 } as const;
 
 export const JOB_NAMES = {
   SEND_DIGEST: 'send-daily-digest',
   DLQ_EVENT: 'dlq-failed-event',
+  ORCHESTRATE: 'orchestrate-notification',
 } as const;
 
 export const HTTP_STATUS = {

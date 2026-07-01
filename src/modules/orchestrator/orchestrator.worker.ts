@@ -1,0 +1,80 @@
+import { Worker,Job } from "bullmq";
+import { redisConfig } from "../../config";
+import { QUEUE_NAMES, JOB_NAMES } from "../../shared/constants";
+import { logger } from "../../shared/logger/pino.logger";
+import { dlqQueue } from "../../shared/queues/queue.config";
+import { OrchestratorService } from "./orchestrator.service";
+import { EventRepository } from "../events/event.repo";
+
+export const startOrchestrationWorker = (): Worker =>{
+    const worker = new Worker(
+        QUEUE_NAMES.ORCHESTRATION,
+        async (job: Job) =>{
+            if(job.name === JOB_NAMES.ORCHESTRATE){
+                await processOrchestration(job)
+            }
+        },
+        {
+            connection: {
+                host: redisConfig.host,
+                port: redisConfig.port,
+            }
+        }
+        
+    )
+    worker.on('completed', (job: Job) =>{
+        logger.info({
+            jobId: job.id,
+            jobName: job.name
+        }, "Job completed")
+    })
+    worker.on('failed', onFailedHandler);
+    logger.info('Orchestration worker started')
+    return worker;
+}
+
+
+export const processOrchestration = async (job: Job): Promise<void> => {
+    const orchestratorService = new OrchestratorService();
+    const eventRepo = new EventRepository();
+
+    await orchestratorService.orchestrate(job.data);
+    // mark event as completed
+    await eventRepo.updateOrchestrationStatus(job.data.eventId, 'COMPLETED');
+    logger.info(
+        {eventId: job.data.eventId, jobId: job.id},
+        'Orchestration completed - event marked COMPLETED'
+    )
+};
+
+export const onFailedHandler = async (
+  job: Job | undefined,
+  error: Error,
+): Promise<void> => {
+    if (job && job.attemptsMade >= 3) {
+        const eventRepository = new EventRepository();
+
+        await dlqQueue.add(
+            JOB_NAMES.DLQ_EVENT,
+            {
+                eventId: job.data.eventId,
+                tenantId: job.data.tenantId,
+                correlationId: job.data.correlationId,
+                error: error.message,
+                failedAt: new Date().toISOString(),
+            },
+        );
+
+        // Mark as terminal FAILED state — recovery must never touch this again
+        await eventRepository.updateOrchestrationStatus(job.data.eventId, 'FAILED');
+
+        logger.error(
+            {
+                eventId: job.data.eventId,
+                jobId: job.id,
+                error: error.message,
+            },
+            'Orchestration job exhausted retries — sent to DLQ and marked FAILED',
+        );
+    }
+};

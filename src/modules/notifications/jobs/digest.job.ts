@@ -7,10 +7,10 @@ export const scheduleDailyDigest = async (tenantId: string): Promise<void> => {
         JOB_NAMES.SEND_DIGEST,
         { tenantId },
         {
-        repeat: {
-            pattern: '0 8 * * *', // Every day at 8:00 AM
-        },
-        jobId: `${QUEUE_NAMES.DIGEST}-${tenantId}`,
+            repeat: {
+                pattern: '0 8 * * *', // Every day at 8:00 AM
+            },
+            jobId: `${QUEUE_NAMES.DIGEST}-${tenantId}`,
         },
     );
 
@@ -22,7 +22,7 @@ export const triggerDigestNow = async (tenantId: string): Promise<void> => {
         JOB_NAMES.SEND_DIGEST,
         { tenantId },
         {
-        jobId: `${QUEUE_NAMES.DIGEST}-${tenantId}-manual-${Date.now()}`,
+            jobId: `${QUEUE_NAMES.DIGEST}-${tenantId}-manual-${Date.now()}`,
         },
     );
 

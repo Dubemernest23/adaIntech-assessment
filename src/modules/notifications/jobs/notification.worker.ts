@@ -11,8 +11,8 @@ export const startNotificationWorker = (): Worker => {
             if (job.name === JOB_NAMES.SEND_DIGEST) {
                 await processDailyDigest(job);
             }
-            },
-            {
+        },
+        {
             connection: {
                 host: redisConfig.host,
                 port: redisConfig.port,

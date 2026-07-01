@@ -1,23 +1,53 @@
 import {EventRepository} from "./event.repo";    
 import {IncomingEventInput} from "./event.validation";
-import {EventIngestionResult} from "./event.types";
+import {EventIngestionResult, OrchestrationJob} from "./event.types";
 import { logger } from '../../shared/logger/pino.logger';
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { orchestrationQueue } from '../../shared/queues/queue.config';
+import { JOB_NAMES } from "../../shared/constants";
 
 export class EventService {
-    private repository: EventRepository;
-    private orchestrator: OrchestratorService
-
-    constructor() {
-        this.repository = new EventRepository();
-        this.orchestrator = new OrchestratorService()
-    }
+    
+    constructor(
+        private readonly repository = new EventRepository()
+    ) {}
 
     async ingestEvent(data: IncomingEventInput,correlationId: string): Promise<EventIngestionResult> {
-        // Idempotency check and ensure event is not processed multiple times
-        const existing = await this.repository.findByEventId(data.eventId);
 
-        if (existing) {
+        // Idempotency check and ensure event is not processed multiple times
+        const existingEvent = await this.repository.findEventById(data.eventId);
+
+        if (existingEvent) {
+            if(
+                existingEvent.orchestrationStatus === 'PENDING' ||
+                existingEvent.orchestrationStatus === 'ENQUEUE_FAILED'
+            ){
+                logger.warn(
+                    {
+                        eventId: data.eventId,
+                        status: existingEvent.orchestrationStatus,
+                        correlationId
+                    },
+                    'Event exists but was not queued — attempting re-enqueue',
+                );
+
+                await this.enqueueOrchestration(
+                    {
+                        eventId: existingEvent.eventId,
+                        eventType: existingEvent.eventType,
+                        userId: existingEvent.userId,
+                        tenantId: existingEvent.tenantId,
+                        payload: existingEvent.payload as Record<string, unknown>,
+                        correlationId,
+                    }
+                );
+
+                return {eventId: data.eventId,
+                    status: 'accepted',
+                    message: 'Event re-queued for orchestrtaion'
+                }
+            }
+
+            // already queued or completed 
             logger.warn(
                 { eventId: data.eventId, correlationId },
                 'Duplicate event received — skipping',
@@ -29,7 +59,8 @@ export class EventService {
             };
         }
 
-        const event = await this.repository.createEvent(data, data.tenantId);
+        // save events with pending order
+        const event = await this.repository.createEvent(data);
 
         logger.info(
             {
@@ -41,34 +72,69 @@ export class EventService {
             'Event ingested successfully',
         );
 
-        // trigger orchestration asychronously and don't await this because ingestion and orchestration
-        // are seperate concerns 
-        if (data.userId) {
-            this.orchestrator.orchestrate({
-                eventId: data.eventId,
-                eventType: data.eventType,
-                userId: data.userId,
-                tenantId: data.tenantId,
-                payload: data.payload,
-                correlationId,
-            }).catch((error) =>{
-                logger.error(
-                    {
-                        eventId: data.eventId,
-                        error: error.message,
-                        correlationId
-                    },
-                    "Orchestration failed"
-                );
-            });
-        }
-
-
+        // enqueue orchestrtaion for processing
+        await this.enqueueOrchestration(
+            {
+                eventId: event.eventId,
+                eventType: event.eventType,
+                userId: event.userId,
+                tenantId: event.tenantId,
+                payload: event.payload as Record<string, unknown>,
+                correlationId, 
+            }
+        )
 
         return {
             eventId: event.eventId,
             status: 'accepted',
             message: 'Event accepted for processing',
         };
+    }
+
+    private async enqueueOrchestration(jobData: OrchestrationJob) : Promise<void>{
+        const {eventId} = jobData;
+
+        // queue operation
+        try {
+            await orchestrationQueue.add(
+                JOB_NAMES.ORCHESTRATE,
+                jobData,
+                {
+                    jobId: `orchestrate-${eventId}`,
+                }
+            )
+        } catch (error){
+            
+            await this.repository.updateOrchestrationStatus(
+                eventId,
+                'ENQUEUE_FAILED'
+            );
+            logger.error(
+                {
+                    eventId,
+                    error
+                },
+                'Failed to enqueu orchestration job'
+            )
+            return;
+        }
+        
+        // databas update
+        try{
+            await this.repository.updateOrchestrationStatus(
+                eventId,
+                'QUEUED',
+            );
+            logger.info(
+                {eventId},
+                'Orchestration job enqueud successfully',
+            )
+        }catch(error){
+            logger.error(
+                {eventId, error}, 
+                'Job was queued but failed to update status',
+            )
+        }
+ 
     }
 }

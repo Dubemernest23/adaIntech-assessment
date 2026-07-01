@@ -8,12 +8,17 @@ import { logger } from './shared/logger/pino.logger';
 import { startNotificationWorker } from './modules/notifications/jobs/notification.worker';
 import { scheduleDailyDigest } from './modules/notifications/jobs/digest.job';
 import { Worker } from 'bullmq';
+import { startOrchestrationWorker } from './modules/orchestrator/orchestrator.worker';
+import { recoverOrphanedEvents } from './modules/events/event.recovery';
 
 const startServer = async (): Promise<void> => {
   try {
     await connectDatabase();
 
     const worker: Worker = startNotificationWorker();
+    const orchestrationWorker: Worker = startOrchestrationWorker()
+
+    await recoverOrphanedEvents();
 
     // Schedule daily digest for all tenants in the database
     // In production this would also be triggered at tenant onboarding
@@ -41,6 +46,7 @@ const startServer = async (): Promise<void> => {
       logger.info(`${signal} received, shutting down gracefully`);
       server.close(async () => {
         await worker.close();
+        await orchestrationWorker.close();
         await disconnectDatabase();
         logger.info('Server closed');
         process.exit(0);

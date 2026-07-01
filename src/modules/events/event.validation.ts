@@ -12,7 +12,7 @@ export const incomingEventSchema = z.object({
     'system_alert',
   ]),
   tenantId: z.string().min(1),
-  userId: z.string().optional(),
+  userId: z.string().min(1),
   productLine: z.enum(['saas', 'fintech', 'ple']),
   schemaVersion: z.enum([...SUPPORTED_SCHEMA_VERSIONS]).refine(
     (val) => SUPPORTED_SCHEMA_VERSIONS.includes(val as '1.0'),
