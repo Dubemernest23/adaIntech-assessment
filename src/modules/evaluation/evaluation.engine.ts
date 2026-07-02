@@ -55,11 +55,10 @@ export const isInQuietHours = (
     export const evaluatePreferences = (
         event: EventData,
         preferences: PreferenceData,
+        category: string | null,
         now: Date = new Date(),
     ): EvaluationResult => {
-        // Map event to category
-        const category = mapEventToCategory(event.eventType);
-
+        
         if (!category) {
             return {
                 status: 'skip',

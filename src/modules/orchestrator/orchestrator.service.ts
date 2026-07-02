@@ -7,21 +7,24 @@ import { JOB_NAMES } from '../../shared/constants';
 import { logger } from '../../shared/logger/pino.logger';
 import { OrchestratorInput, OrchestratorResult, ChannelOutcome } from './orchestrator.types';
 import { PreferenceData } from '../evaluation/evaluation.types';
+import { CategoryRouterService } from '../evaluation/category-router.service';
 
 export class OrchestratorService {
 
     private providerRegistry: ProviderRegistry;
     private deliveryRepository: DeliveryRepository;
     private notificationRepository: NotificationRepository;
+    private categoryRouter: CategoryRouterService;
 
     constructor() {
         this.providerRegistry = new ProviderRegistry();
         this.deliveryRepository = new DeliveryRepository();
         this.notificationRepository = new NotificationRepository();
+        this.categoryRouter = new CategoryRouterService();
     }
 
     async orchestrate(input: OrchestratorInput): Promise<OrchestratorResult> {
-        const { eventId, eventType, userId, tenantId, payload, correlationId } = input;
+        const { eventId, eventType, userId, tenantId, productLine, payload, correlationId } = input;
 
         logger.info({ eventId, eventType, userId, tenantId, correlationId }, 'Orchestrating delivery');
 
@@ -73,12 +76,16 @@ export class OrchestratorService {
             })),
         };
         
+        // resolve category before evaluation
+        const category  = await this.categoryRouter.resolve(eventType,tenantId,productLine)
+
         // evaluate prefrences before handling skip
         const evaluationResult = evaluatePreferences(
             { eventType, userId, tenantId },
             preferenceData,
+            category
         );
-
+        
         //Handle skip
         if (evaluationResult.status === 'skip') {
             await this.deliveryRepository.createRecord({

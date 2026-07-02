@@ -1,4 +1,3 @@
-
 import {
   evaluatePreferences,
   isInQuietHours,
@@ -56,19 +55,16 @@ describe('mapEventToCategory', () => {
 
 describe('isInQuietHours', () => {
   it('should return true when time is within overnight quiet hours', () => {
-    // 23:00 Lagos time — quiet hours are 22:00-07:00
     const now = new Date('2026-06-06T22:00:00Z'); // 23:00 Lagos (UTC+1)
     expect(isInQuietHours(now, '22:00', '07:00', 'Africa/Lagos')).toBe(true);
   });
 
   it('should return true when time is in early morning quiet hours', () => {
-    // 06:00 Lagos time — still in quiet hours
     const now = new Date('2026-06-06T05:00:00Z'); // 06:00 Lagos
     expect(isInQuietHours(now, '22:00', '07:00', 'Africa/Lagos')).toBe(true);
   });
 
   it('should return false when time is outside quiet hours', () => {
-    // 14:00 Lagos time — outside quiet hours
     const now = new Date('2026-06-06T13:00:00Z'); // 14:00 Lagos
     expect(isInQuietHours(now, '22:00', '07:00', 'Africa/Lagos')).toBe(false);
   });
@@ -86,30 +82,20 @@ describe('getEnabledChannels', () => {
   });
 
   it('should return only enabled channels', () => {
-    const prefs = {
-      ...basePreferences,
-      smsEnabled: false,
-      inAppEnabled: false,
-    };
-    const channels = getEnabledChannels(prefs);
-    expect(channels).toEqual(['email']);
+    const prefs = { ...basePreferences, smsEnabled: false, inAppEnabled: false };
+    expect(getEnabledChannels(prefs)).toEqual(['email']);
   });
 
   it('should return empty array when no channels enabled', () => {
-    const prefs = {
-      ...basePreferences,
-      emailEnabled: false,
-      smsEnabled: false,
-      inAppEnabled: false,
-    };
+    const prefs = { ...basePreferences, emailEnabled: false, smsEnabled: false, inAppEnabled: false };
     expect(getEnabledChannels(prefs)).toEqual([]);
   });
 });
 
 describe('evaluatePreferences', () => {
   it('should return deliver for valid event during active hours', () => {
-    const now = new Date('2026-06-06T13:00:00Z'); // 14:00 Lagos — not quiet hours
-    const result = evaluatePreferences(baseEvent, basePreferences, now);
+    const now = new Date('2026-06-06T13:00:00Z'); // 14:00 Lagos
+    const result = evaluatePreferences(baseEvent, basePreferences, 'billing', now);
 
     expect(result.status).toBe('deliver');
     expect(result.channels).toContain('email');
@@ -121,34 +107,27 @@ describe('evaluatePreferences', () => {
   it('should skip when category is disabled', () => {
     const prefs = {
       ...basePreferences,
-      categories: [
-        { category: 'billing', enabled: false, deliveryMode: 'realtime' },
-      ],
+      categories: [{ category: 'billing', enabled: false, deliveryMode: 'realtime' }],
     };
     const now = new Date('2026-06-06T13:00:00Z');
-    const result = evaluatePreferences(baseEvent, prefs, now);
+    const result = evaluatePreferences(baseEvent, prefs, 'billing', now);
 
     expect(result.status).toBe('skip');
     expect(result.skipReason).toBe('category_disabled');
   });
 
   it('should skip when in quiet hours', () => {
-    const now = new Date('2026-06-06T22:00:00Z'); // 23:00 Lagos — quiet hours
-    const result = evaluatePreferences(baseEvent, basePreferences, now);
+    const now = new Date('2026-06-06T22:00:00Z'); // 23:00 Lagos
+    const result = evaluatePreferences(baseEvent, basePreferences, 'billing', now);
 
     expect(result.status).toBe('skip');
     expect(result.skipReason).toBe('quiet_hours');
   });
 
   it('should skip when no channels enabled', () => {
-    const prefs = {
-      ...basePreferences,
-      emailEnabled: false,
-      smsEnabled: false,
-      inAppEnabled: false,
-    };
+    const prefs = { ...basePreferences, emailEnabled: false, smsEnabled: false, inAppEnabled: false };
     const now = new Date('2026-06-06T13:00:00Z');
-    const result = evaluatePreferences(baseEvent, prefs, now);
+    const result = evaluatePreferences(baseEvent, prefs, 'billing', now);
 
     expect(result.status).toBe('skip');
     expect(result.skipReason).toBe('no_channels_enabled');
@@ -157,17 +136,17 @@ describe('evaluatePreferences', () => {
   it('should return daily_digest delivery mode for engagement events', () => {
     const event = { ...baseEvent, eventType: 'user_onboarded' };
     const now = new Date('2026-06-06T13:00:00Z');
-    const result = evaluatePreferences(event, basePreferences, now);
+    const result = evaluatePreferences(event, basePreferences, 'engagement', now);
 
     expect(result.status).toBe('deliver');
     expect(result.deliveryMode).toBe('daily_digest');
     expect(result.category).toBe('engagement');
   });
 
-  it('should skip unknown event types', () => {
+  it('should skip when category resolved to null (unknown event type)', () => {
     const event = { ...baseEvent, eventType: 'unknown_event' };
     const now = new Date('2026-06-06T13:00:00Z');
-    const result = evaluatePreferences(event, basePreferences, now);
+    const result = evaluatePreferences(event, basePreferences, null, now);
 
     expect(result.status).toBe('skip');
   });
