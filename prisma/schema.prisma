@@ -144,7 +144,6 @@ model CategoryMapping {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@unique([eventType, productLine, tenantId])
   @@index([tenantId])
   @@index([productLine])
   @@map("category_mappings")
