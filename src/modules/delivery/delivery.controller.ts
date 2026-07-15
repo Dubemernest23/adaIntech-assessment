@@ -34,7 +34,7 @@ export class DeliveryController {
       const to = req.query.to ? new Date(req.query.to as string) : undefined;
       if(to && isNaN(to.getTime())){
         throw new AppError(
-          'Invalid from date',
+          'Invalid to date',
           HTTP_STATUS.BAD_REQUEST
         );        
       }
