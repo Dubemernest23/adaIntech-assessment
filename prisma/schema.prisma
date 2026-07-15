@@ -133,3 +133,18 @@ model DeliveryRecord {
   @@index([eventId])
   @@map("delivery_records")
 }
+
+model CategoryMapping {
+  id          String   @id @default(uuid())
+  eventType   String   @map("event_type")
+  category    String
+  productLine String?  @map("product_line")
+  tenantId    String?  @map("tenant_id")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([productLine])
+  @@map("category_mappings")
+}

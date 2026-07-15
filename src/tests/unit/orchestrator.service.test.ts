@@ -21,6 +21,11 @@ jest.mock('../../shared/logger/pino.logger', () => ({
     debug: jest.fn(),
   },
 }));
+jest.mock('../../modules/evaluation/category-router.service', () => ({
+    CategoryRouterService: jest.fn().mockImplementation(() => ({
+        resolve: jest.fn().mockResolvedValue('billing'),
+    })),
+}));
 
 import { NotificationRepository } from '../../modules/notifications/notification.repo';
 import { DeliveryRepository } from '../../modules/delivery/delivery.repo';
@@ -62,6 +67,7 @@ const baseInput = {
   eventType: 'transaction_created',
   userId: 'user-001',
   tenantId: 'tenant-001',
+  productLine: 'fintech',
   payload: { amount: 1000 },
   correlationId: 'test-correlation-id',
 };
@@ -69,8 +75,19 @@ const baseInput = {
 describe('OrchestratorService', () => {
   let service: OrchestratorService;
 
+  // beforeEach(() => {
+  //   jest.clearAllMocks();
+  //   service = new OrchestratorService();
+  // });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    const { CategoryRouterService } = require('../../modules/evaluation/category-router.service');
+    (CategoryRouterService as jest.Mock).mockImplementation(() => ({
+        resolve: jest.fn().mockResolvedValue('billing'),
+    }));
+    
     service = new OrchestratorService();
   });
 
@@ -116,13 +133,21 @@ describe('OrchestratorService', () => {
 
   it('should queue for digest when delivery mode is daily_digest', async () => {
     const { digestQueue } = require('../../shared/queues/queue.config');
-    mockFindByUserAndTenant.mockResolvedValue(basePreference);
+    const { CategoryRouterService } = require('../../modules/evaluation/category-router.service');
+      
+      // override resolve to return engagement for this test
+      (CategoryRouterService as jest.Mock).mockImplementation(() => ({
+          resolve: jest.fn().mockResolvedValue('engagement'),
+      }));
+      
+      service = new OrchestratorService();
+      mockFindByUserAndTenant.mockResolvedValue(basePreference);
 
-    const digestInput = { ...baseInput, eventType: 'user_onboarded' };
-    const result = await service.orchestrate(digestInput);
+      const digestInput = { ...baseInput, eventType: 'user_onboarded' };
+      const result = await service.orchestrate(digestInput);
 
-    expect(result.outcomes[0].status).toBe('queued');
-    expect(digestQueue.add).toHaveBeenCalled();
+      expect(result.outcomes[0].status).toBe('queued');
+      expect(digestQueue.add).toHaveBeenCalled();
   });
 
   it('should record failed delivery when provider returns failure', async () => {
