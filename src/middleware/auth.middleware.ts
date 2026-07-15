@@ -32,7 +32,8 @@ export const authenticate = (
 
     const token = authHeader.split(' ')[1];
 
-    const decoded = jwt.verify(token, jwtConfig.publicKey, { // Ensure the token is signed with the expected algorithm
+    const decoded = jwt.verify(token, jwtConfig.publicKey, { 
+      // Ensure the token is signed with the expected algorithm
       algorithms: [jwtConfig.algorithm],
     }) as JwtPayload;
 
