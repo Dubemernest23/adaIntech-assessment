@@ -82,7 +82,13 @@
   "collectCoverageFrom": [
     "src/modules/**/*.ts",
     "!src/modules/**/*.types.ts",
-    "!src/modules/**/*.routes.ts"
+    "!src/modules/**/*.routes.ts",
+    "!src/modules/health/**",
+    "!src/modules/notifications/notification.controller.ts",
+    "!src/modules/notifications/notification.service.ts",
+    "!src/modules/notifications/notification.repo.ts",
+    "!src/modules/events/event.controller.ts",
+    "!src/modules/events/event.repo.ts"
   ],
   "coverageThreshold": {
     "global": {

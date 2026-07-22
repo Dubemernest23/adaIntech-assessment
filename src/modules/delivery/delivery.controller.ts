@@ -22,7 +22,23 @@ export class DeliveryController {
       const targetUserId = req.user!.role === 'admin' && req.query.userId ? req.query.userId as string : user_id;
       const status = req.query.status as DeliveryStatusEnum | undefined;
       const channel = req.query.channel as string | undefined;
-      
+      const VALID_STATUSES: DeliveryStatusEnum[] = ['sent', 'failed', 'skipped', 'queued'];
+      const VALID_CHANNELS: string[] = ['email', 'sms', 'in_app'];
+
+      if (status && !VALID_STATUSES.includes(status)) {
+        throw new AppError(
+          `Invalid status. Valid statuses are: ${VALID_STATUSES.join(', ')}`,
+          HTTP_STATUS.BAD_REQUEST,
+        );
+      }
+
+      if (channel && !VALID_CHANNELS.includes(channel)) {
+        throw new AppError(
+          `Invalid channel. Valid channels are: ${VALID_CHANNELS.join(', ')}`,
+          HTTP_STATUS.BAD_REQUEST,
+        );
+      }
+
       const from = req.query.from ? new Date(req.query.from as string): undefined;
       if(from && isNaN(from.getTime())){
           throw new AppError(
