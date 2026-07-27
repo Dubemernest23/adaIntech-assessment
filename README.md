@@ -1,6 +1,6 @@
 # ABP Connect – Notification Preference Service
 
-A multi-tenant notification preference management service built with Express.js and TypeScript. Enables authenticated users to configure notification channels, delivery modes, quiet hours, and category preferences within a strict tenant-isolated environment.
+A multi-tenant notification preference management and delivery orchestration service built with Express.js and TypeScript. Enables authenticated users to configure notification channels, delivery modes, quiet hours, and category preferences within a strict tenant-isolated environment. Includes NEOS (Notification Execution and Orchestration System) for durable event ingestion, dynamic category routing, and delivery history reporting.
 
 ---
 
@@ -10,8 +10,11 @@ A multi-tenant notification preference management service built with Express.js 
 ├── src/
 │   ├── config/          # Centralised environment configuration
 │   ├── modules/
-│   │   ├── notifications/   # Core notification preference module
-│   │   │   ├── jobs/        # BullMQ background workers
+│   │   ├── events/          # Event ingestion and idempotency
+│   │   ├── orchestrator/    # BullMQ orchestration worker and service
+│   │   ├── evaluation/      # Preference evaluation engine and category router
+│   │   ├── delivery/        # Delivery records, history, and summary endpoints
+│   │   ├── notifications/   # Notification preferences and digest jobs
 │   │   └── health/          # Health check endpoint
 │   ├── middleware/      # Auth, validation, error handling, request ID
 │   ├── shared/          # Logger, constants, errors, response utils, queues
@@ -27,7 +30,9 @@ A multi-tenant notification preference management service built with Express.js 
 
 - **Multi-tenancy**: Every database query is scoped by `tenant_id` extracted from the JWT. Tenant isolation is enforced at both the application and data access layers.
 - **Repository pattern**: Database logic is separated from business logic. Controllers → Services → Repositories.
-- **Background jobs**: BullMQ backed by Redis handles daily digest scheduling with automatic retries (exponential backoff, 3 attempts).
+- **Durable orchestration**: Event ingestion enqueues a BullMQ job immediately. The orchestration worker processes jobs with 3-attempt exponential backoff. Failed jobs land in a DLQ with full context preserved — no silent data loss after successful ingestion.
+- **Dynamic category routing**: `CategoryRouterService` resolves event-to-category mappings in order: tenant override → product-line override → default code constant. Overrides are stored in the `category_mappings` table and take effect without a code deployment.
+- **Background jobs**: BullMQ backed by Redis handles both orchestration and daily digest scheduling with automatic retries.
 - **Structured logging**: Pino provides JSON logs in production with request ID tracing on every log line.
 - **Consistent responses**: All API responses follow a uniform shape `{ success, message, data, requestId }`.
 
@@ -105,7 +110,7 @@ npx prisma migrate dev
 # 6. Generate Prisma client
 npx prisma generate
 
-# 7. Seed the database (optional)
+# 7. Seed the database
 npm run seed
 
 # 8. Start development server
@@ -159,9 +164,13 @@ http://localhost:3000/api/v1/docs
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/health` | Service health check |
-| `GET` | `/api/v1/notifications/preferences` | Get user preferences |
+| `POST` | `/api/v1/events` | Ingest a notification event |
+| `GET` | `/api/v1/notifications/preferences` | Get user notification preferences |
 | `PUT` | `/api/v1/notifications/preferences` | Create or update preferences |
 | `PATCH` | `/api/v1/notifications/preferences/category` | Toggle a notification category |
+| `GET` | `/api/v1/delivery/history` | Get filtered delivery history for authenticated user |
+| `GET` | `/api/v1/delivery/history/:eventId` | Get delivery records for a specific event |
+| `GET` | `/api/v1/delivery/summary` | Get delivery counts grouped by status and channel |
 
 ### Authentication
 
@@ -179,6 +188,36 @@ npx ts-node generate-token.ts
 ```
 
 ### Example Requests
+
+**Ingest an Event**
+```bash
+POST /api/v1/events
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "eventId": "evt-001",
+  "eventType": "transaction_created",
+  "tenantId": "tenant-001",
+  "userId": "user-001",
+  "productLine": "fintech",
+  "schemaVersion": "1.0",
+  "payload": { "amount": 5000 },
+  "occurredAt": "2026-07-01T10:00:00Z"
+}
+```
+
+**Get Delivery History with Filters**
+```bash
+GET /api/v1/delivery/history?status=sent&channel=email&limit=20&from=2026-07-01T00:00:00Z
+Authorization: Bearer <token>
+```
+
+**Get Delivery Summary**
+```bash
+GET /api/v1/delivery/summary
+Authorization: Bearer <token>
+```
 
 **Create/Update Preferences**
 ```bash
@@ -200,88 +239,64 @@ Authorization: Bearer <token>
 }
 ```
 
-**Toggle Category**
-```bash
-PATCH /api/v1/notifications/preferences/category
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "category": "billing",
-  "enabled": false
-}
-```
-
 ---
 
 ## Database Schema
 
-Two core tables with full tenant isolation:
+### Core tables
 
 - **`notification_preferences`** — top-level settings per user per tenant (channels, quiet hours, timezone)
-- **`notification_category_preferences`** — per-category settings (compliance, billing, engagement, system) with individual delivery modes
+- **`notification_category_preferences`** — per-category settings with individual delivery modes
+- **`incoming_events`** — every received event with idempotency enforced via unique `event_id` constraint and `orchestration_status` tracking
+- **`delivery_records`** — every delivery attempt with status, channel, `correlationId`, and `skipReason`
+- **`category_mappings`** — dynamic event-to-category mappings with tenant and product-line overrides; uniqueness enforced via three partial indexes
 
-Indexes on `tenant_id` and `(user_id, tenant_id)` for query performance.
+### Indexes
+
+Indexes on `tenant_id` and `(user_id, tenant_id)` across all tenant-scoped tables for query performance.
 
 ---
 
 ## Background Jobs
 
-Daily digest notifications are processed via BullMQ backed by Redis:
+Two BullMQ queues backed by Redis:
 
+**Orchestration queue (`orchestration-notifications`)**
+- Enqueued immediately after successful event ingestion
+- Worker calls `OrchestratorService.orchestrate()` per job
+- 3-attempt exponential backoff (5s base delay)
+- Exhausted jobs land in the DLQ with `eventId`, `tenantId`, `correlationId`, and error preserved
+
+**Digest queue (`digest-notifications`)**
 - Scheduled at **8:00 AM daily** per tenant
 - Finds all users with `delivery_mode: daily_digest` enabled categories
-- Retries failed jobs up to **3 times** with exponential backoff
-- In production, this would trigger actual email/SMS delivery via a provider
+- 3-attempt exponential backoff
+- In production this would trigger actual email/SMS delivery via a provider
 
 ---
 
-## Assumptions
+## Category Routing
 
-1. **JWT tokens are mocked** — no auth server is implemented. Tokens are generated via `generate-token.ts` for testing purposes.
-2. **Notification delivery is simulated** — the worker logs what would be sent rather than integrating with an email/SMS provider (SendGrid, Twilio etc).
-3. **One preference record per user per tenant** — a user cannot have multiple preference profiles within the same tenant.
-4. **Quiet hours are stored as strings** (`HH:MM` format) — timezone-aware scheduling would be handled by the delivery layer using the stored `timezone` field.
-5. **Daily digest scheduling is per-tenant** — in production, scheduling would be triggered during tenant onboarding.
+`CategoryRouterService` resolves event-to-category mappings dynamically:
 
----
+1. **Tenant override** — `category_mappings` where `eventType = X AND tenantId = Y`
+2. **Product-line override** — `category_mappings` where `eventType = X AND productLine = Z AND tenantId IS NULL`
+3. **Default** — hardcoded constant in `CategoryRouterService`
+4. **null** — unknown event type with no mapping at any level
 
-## NEOS — Notification Execution and Orchestration System
-
-### Quick Start (Task 2)
-
-The service now includes NEOS on top of the Task 1 preference storage layer. To run:
-
-```bash
-# Start infrastructure
-docker compose up postgres redis -d
-
-# Run migrations
-npx prisma migrate dev
-
-# Seed two tenants
-npm run seed
-
-# Generate RS256 test tokens
-npx ts-node generate-token.ts
-
-# Start server
-npm run dev
-```
-
-API docs available at `http://localhost:3000/api/v1/docs`
+Tenant administrators can insert rows into `category_mappings` to override routing without a code deployment.
 
 ---
 
-### Requirements Compliance (R1–R10)
+## Requirements Compliance (R1–R10)
 
 | Ref | Requirement | Implementation |
 |---|---|---|
-| R1 | Automated Tests | Jest unit and integration tests. 48 tests across 6 suites. 72.72% function coverage, 84.74% branch coverage. No live DB or Redis required. |
-| R2 | Idempotent Event Processing | `eventId` unique constraint at DB level. Application-level check in `EventService.ingestEvent()`. Duplicate returns 200 without triggering orchestration. Demonstrated in `idempotency.test.ts`. |
-| R3 | Tenant Isolation | Every DB query scoped by `tenantId` from JWT. Delivery history endpoint enforces tenant scope. Cross-tenant access demonstrated impossible in `tenant-isolation.test.ts`. |
+| R1 | Automated Tests | Jest unit and integration tests. 99 tests across 13 suites. 93.15% statement coverage, 93.33% function coverage. No live DB or Redis required. |
+| R2 | Idempotent Event Processing | `eventId` unique constraint at DB level. Application-level check with `orchestration_status` tracking. `ENQUEUE_FAILED` status allows safe retry. Demonstrated in `idempotency.test.ts`. |
+| R3 | Tenant Isolation | Every DB query scoped by `tenantId` from JWT. Delivery history and summary endpoints enforce tenant scope. Cross-tenant access demonstrated impossible in `tenant-isolation.test.ts` and `delivery.http.test.ts`. |
 | R4 | Provider Interface | `NotificationProvider` interface in `provider.interface.ts`. Three mock adapters: `MockEmailProvider`, `MockSmsProvider`, `MockInAppProvider`. No provider logic in orchestration code. |
-| R5 | Delivery Tracking | Every delivery attempt — sent, failed, skipped, queued — writes a `DeliveryRecord` with `correlationId`. Implemented in `DeliveryRepository.createRecord()`. |
+| R5 | Delivery Tracking | Every delivery attempt — sent, failed, skipped, queued — writes a `DeliveryRecord` with `correlationId`. Queryable via delivery history endpoints. |
 | R6 | Quiet Hours Enforcement | `isInQuietHours()` in evaluation engine handles overnight windows. Skipped events recorded with `skipReason: quiet_hours`. |
 | R7 | Partial Failure Handling | `Promise.allSettled()` in orchestrator ensures all channels attempt delivery independently. Each outcome recorded separately. |
 | R8 | Per-Tenant Rate Limiting | `express-rate-limit` middleware keyed by `tenant_id` from JWT. Applied to event ingestion endpoint. 100 requests per 15-minute window per tenant. |
@@ -290,59 +305,30 @@ API docs available at `http://localhost:3000/api/v1/docs`
 
 ---
 
-### Architectural Decisions
+## Architectural Decisions
 
-#### Decision 1 — Event Ingestion via HTTP Endpoint
+### Decision 1 — Event Ingestion via HTTP Endpoint
 
-**What was decided:** Events are ingested via a `POST /api/v1/events` HTTP endpoint rather than a BullMQ consumer queue.
+**What was decided:** Events are ingested via `POST /api/v1/events` rather than a BullMQ consumer queue.
 
-**Rationale:** An HTTP endpoint fits naturally into the existing Express architecture and keeps the ingestion contract explicit and synchronous at the boundary. The caller receives an immediate acknowledgement — `201 Accepted` for new events, `200` for duplicates — which makes idempotency straightforward to test and reason about. A BullMQ consumer queue would require a separate publisher, adding infrastructure complexity without meaningful benefit at this stage since ABP Connect verticals are HTTP-native services.
+**Rationale:** An HTTP endpoint fits naturally into the existing Express architecture and keeps the ingestion contract explicit and synchronous at the boundary. The caller receives an immediate acknowledgement — `201 Accepted` for new events, `200` for duplicates — which makes idempotency straightforward to test and reason about.
 
-**Trade-offs acknowledged:** An HTTP endpoint couples the producer to the availability of this service. If NEOS is down, the producer receives an error. A queue-based approach would allow producers to publish regardless of consumer availability. In a high-throughput production system, a message queue (Kafka, RabbitMQ, or BullMQ with a dedicated publisher) would be the correct choice. The HTTP approach is the right starting point for this stage of the system.
-
----
-
-#### Decision 2 — Idempotency via Database Unique Constraint
-
-**What was decided:** Idempotency is enforced by a `@unique` constraint on the `eventId` column in the `incoming_events` table, backed by an application-level check in `EventService.ingestEvent()`.
-
-**Rationale:** The application-level check provides a fast, readable path for duplicate detection — if the `eventId` already exists, the service returns immediately without touching the orchestrator. The database constraint provides a second layer of defence: even if two requests arrive simultaneously and both pass the application check, the database will reject the second insert. This two-layer approach means idempotency survives race conditions, Redis restarts, and application crashes. An in-memory set or Redis-based lock would not survive a process restart.
-
-**Trade-offs acknowledged:** The database check adds one query per ingestion request. At high throughput this could become a bottleneck. A Redis-based idempotency key with a TTL would be faster but introduces a dependency on Redis availability and a time window within which duplicates could slip through after a Redis restart. The database approach trades marginal latency for correctness guarantees.
+**Trade-offs acknowledged:** An HTTP endpoint couples the producer to the availability of this service. In a high-throughput production system, a message queue (Kafka, RabbitMQ, or BullMQ with a dedicated publisher) would be the correct choice. The HTTP approach is the right starting point for this stage of the system.
 
 ---
 
-#### Decision 3 — What I Would Change Given Additional Time
+### Decision 2 — Idempotency via Database Unique Constraint
 
-**The decision:** The orchestration flow is currently fire-and-forget — `EventService` triggers `OrchestratorService.orchestrate()` without awaiting it, catching errors only in a `.catch()` handler.
+**What was decided:** Idempotency is enforced by a `@unique` constraint on `eventId` in `incoming_events`, backed by an application-level check in `EventService.ingestEvent()`.
 
-**Why it was made:** Separating ingestion from orchestration keeps the HTTP response time low. The caller does not wait for delivery to complete. This is architecturally correct.
+**Rationale:** The application-level check provides a fast, readable path for duplicate detection. The database constraint provides a second layer of defence against race conditions. The `orchestration_status` field tracks pipeline progress — `ENQUEUE_FAILED` events can be safely re-enqueued on retry without creating a duplicate.
 
-**What is wrong with it:** If the orchestration fails silently — for example, if the database is briefly unavailable when writing delivery records — there is no retry mechanism for the orchestration step itself. The event is marked as received but no delivery record is written. The gap is invisible unless you are actively monitoring logs.
-
-**What I would change:** I would add the orchestration step to a BullMQ queue immediately after ingestion. The queue job would handle orchestration with the existing retry and DLQ configuration. This gives orchestration the same resilience as digest delivery — three attempts with exponential backoff, failed jobs visible in the DLQ, and no silent data loss. The HTTP response would still return immediately after enqueueing, preserving the low-latency ingestion contract.
+**Trade-offs acknowledged:** The database check adds one query per ingestion request. At high throughput, a Redis-based idempotency key with a TTL would be faster but introduces availability and correctness trade-offs. The database approach trades marginal latency for correctness guarantees.
 
 ---
 
-### Database Schema
+### Decision 3 — Durable Orchestration via BullMQ Queue
 
-**New tables added in Task 2:**
+**What was decided:** `EventService` enqueues a BullMQ job immediately after ingestion. The orchestration worker processes jobs asynchronously with 3-attempt exponential backoff and DLQ on exhaustion.
 
-- **`incoming_events`** — stores every received event with idempotency enforced via unique `event_id` constraint
-- **`delivery_records`** — records every delivery attempt with status, channel, correlationId, and skipReason
-
-**Design decisions:**
-- `tenantId` duplicated on `delivery_records` to avoid joins on every tenant-scoped query
-- `processed` flag on `incoming_events` tracks pipeline completion
-- Indexes on `(userId, tenantId)` on both tables for query performance
-
----
-
-### Failure Resilience
-
-| Scenario | Approach |
-|---|---|
-| Duplicate event | DB unique constraint + application check. Same eventId never produces more than one delivery attempt. Tested in `idempotency.test.ts`. |
-| Partial provider failure | `Promise.allSettled()` ensures all channels attempt delivery. Each outcome recorded independently. |
-| Queue unavailability | If Redis is unreachable, BullMQ connection errors are logged. Realtime delivery still proceeds via direct provider calls. Digest scheduling fails gracefully with logged errors. Documented gap: orchestration should be queued (see Decision 3). |
-| Out-of-order events | Events are processed in arrival order, not `occurredAt` order. Out-of-order arrival produces correct delivery records for each event independently. Since preference evaluation uses the current time (not `occurredAt`), a delayed event may be evaluated against different quiet hours than when it originally occurred. This is acceptable at this stage — the delivery record captures `occurredAt` for audit purposes and a deduplication window could be added in a future iteration. |
+**Rationale:** The previous fire-and-forget pattern — calling `orchestrate().catch(logger.error)` — meant that a failed orchestration after successful ingestion resulted in silent data loss. The `eventId` was not recoverable. Moving orchestration into a durable queue means every accepted event is guaranteed to reach the orchestration worker. Failed jobs are preserved in the DLQ with full context (`eventId`, `tenantId`, `correlationId`, error, `failedAt`) for operational inspection and reprocessing. The HTTP response still returns immediately after enqueueing, preserving the low-latency ingestion contract.

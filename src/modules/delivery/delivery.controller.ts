@@ -56,7 +56,7 @@ export class DeliveryController {
       }
 
       const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      if(limit !== undefined && isNaN(limit)){
+      if(limit !== undefined && (!Number.isInteger(limit) || limit < 1 )){
           throw new AppError(
               'Invalid limit',
               HTTP_STATUS.BAD_REQUEST
