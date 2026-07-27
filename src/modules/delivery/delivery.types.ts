@@ -1,3 +1,5 @@
+import { from } from "node:stream/iter";
+
 export type DeliveryStatusEnum = 'sent' | 'failed' | 'skipped' | 'queued';
 
 export interface CreateDeliveryRecordInput {
@@ -8,4 +10,28 @@ export interface CreateDeliveryRecordInput {
   status: DeliveryStatusEnum;
   skipReason?: string;
   correlationId: string;
+}
+
+export interface DeliveryHistoryFilters {
+  channel?: string;
+  status?: DeliveryStatusEnum;
+  from?: Date; 
+  to?: Date;
+  limit?: number; 
+}
+
+export interface DeliveryStatusSummary {
+ status:string;
+ count: number;
+}
+
+export interface DeliveryChannelSummary {
+  channel: string;
+  count: number;
+}
+
+export interface DeliverySummaryResult {
+  byStatus: DeliveryStatusSummary[];
+  byChannel: DeliveryChannelSummary[];
+  total: number;
 }
