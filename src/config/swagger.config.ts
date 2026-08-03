@@ -63,6 +63,57 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        DeliveryRecord: {
+          type: 'object',
+          properties: {
+              id: { type: 'string', format: 'uuid' },
+              eventId: { type: 'string' },
+              userId: { type: 'string' },
+              tenantId: { type: 'string' },
+              channel: { type: 'string', enum: ['email', 'sms', 'in_app'] },
+              status: { type: 'string', enum: ['sent', 'failed', 'skipped', 'queued'] },
+              skipReason: { type: 'string', nullable: true },
+              correlationId: { type: 'string' },
+              attemptedAt: { type: 'string', format: 'date-time' },
+          },
+      },
+      DeliverySummaryResult: {
+          type: 'object',
+          properties: {
+              byStatus: {
+                  type: 'array',
+                  items: {
+                      type: 'object',
+                      properties: {
+                          status: { type: 'string' },
+                          count: { type: 'integer' },
+                      },
+                  },
+              },
+              byChannel: {
+                  type: 'array',
+                  items: {
+                      type: 'object',
+                      properties: {
+                          channel: { type: 'string' },
+                          count: { type: 'integer' },
+                      },
+                  },
+              },
+              total: { type: 'integer' },
+          },
+      },
+      CategoryMapping: {
+          type: 'object',
+          properties: {
+              id: { type: 'string', format: 'uuid' },
+              eventType: { type: 'string' },
+              category: { type: 'string' },
+              productLine: { type: 'string', nullable: true },
+              tenantId: { type: 'string', nullable: true },
+              isDefault: { type: 'boolean' },
+          },
+      },
         SuccessResponse: {
           type: 'object',
           properties: {
