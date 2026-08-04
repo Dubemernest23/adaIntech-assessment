@@ -53,7 +53,7 @@ export class DeliveryRepository {
     // new methods - findByUserAndTenantFiltered & getSummaryByUserAndTenant
     async findByUserAndTenantFiltered (userId: string, tenantId: string, filters: DeliveryHistoryFilters): Promise<DeliveryRecord[]> {
       
-        const sanitizedLimit = Math.min(Math.max(filters.limit ?? 50, 1), 200)
+        const sanitizedLimit = filters.limit ?? 50;
         const whereClause: Prisma.DeliveryRecordWhereInput = {tenantId,userId};
      
         if(filters.status){

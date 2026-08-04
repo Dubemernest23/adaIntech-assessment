@@ -36,6 +36,7 @@ export class EventService {
                         eventType: existingEvent.eventType,
                         userId: existingEvent.userId,
                         tenantId: existingEvent.tenantId,
+                        productLine: existingEvent.productLine,
                         payload: existingEvent.payload as Record<string, unknown>,
                         correlationId,
                     }
@@ -79,6 +80,7 @@ export class EventService {
                 eventType: event.eventType,
                 userId: event.userId,
                 tenantId: event.tenantId,
+                productLine: event.productLine,
                 payload: event.payload as Record<string, unknown>,
                 correlationId, 
             }

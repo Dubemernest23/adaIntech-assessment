@@ -132,6 +132,13 @@ describe('Delivery API — D3', () => {
 
             expect(res.status).toBe(400);
         });
+        // test for invalid to date
+        it('should return 400 for invalid to date', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?to=not-a-date')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
+        });
 
         it('should apply limit query param correctly', async () => {
             mockFindMany.mockResolvedValue([]);
@@ -143,6 +150,22 @@ describe('Delivery API — D3', () => {
             expect(mockFindMany).toHaveBeenCalledWith(
                 expect.objectContaining({ take: 10 }),
             );
+        });
+
+        //test for limit less than 1 returns 400
+        it('should return 400 when limit is less than 1', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?limit=0')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
+        });
+
+        // test for limit more than 200 returns 400
+        it('should return 400 when limit exceeds 200', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?limit=201')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
         });
 
         it('should allow admin to query by userId', async () => {

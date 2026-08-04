@@ -45,9 +45,26 @@ const controller = new DeliveryController();
     *           default: 50
     *           maximum: 200
     *         description: Maximum number of records to return
-    *   responses:
+    *     responses:
     *       200:
     *         description: Delivery history retrieved successfully
+    *         content:
+    *           application/json:
+    *             schema:
+    *               allOf:
+    *                 - $ref: '#/components/schemas/SuccessResponse'
+    *                 - type: object
+    *                   properties:
+    *                     data:
+    *                       type: array
+    *                       items:
+    *                         $ref: '#/components/schemas/DeliveryRecord'
+    *       400:
+    *         description: Invalid query parameter
+    *         content:
+    *           application/json:
+    *             schema:
+    *               $ref: '#/components/schemas/ErrorResponse'
     *       401:
     *         description: Unauthorized
 */
@@ -72,6 +89,17 @@ router.get('/history', authenticate, controller.getDeliveryHistory);
  *     responses:
  *       200:
  *         description: Event delivery history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/DeliveryRecord'
  *       401:
  *         description: Unauthorized
  */
@@ -87,9 +115,24 @@ router.get('/history/:eventId', authenticate, controller.getDeliveryHistoryByEve
  *     tags: [Delivery]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+*       - in: query
+*         name: userId
+*         schema:
+*           type: string
+*         description: Admin only — filter summary by specific userId (still tenant-scoped)
  *     responses:
  *       200:
  *         description: Delivery summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/DeliverySummaryResult'
  *       401:
  *         description: Unauthorized
  */

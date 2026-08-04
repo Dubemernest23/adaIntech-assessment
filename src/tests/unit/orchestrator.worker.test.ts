@@ -43,6 +43,7 @@ const mockJob = {
     eventType: 'transaction_created',
     userId: 'user-001',
     tenantId: 'tenant-001',
+    productLine: 'fintech',
     payload: { amount: 1000 },
     correlationId: 'test-correlation-id',
   },

@@ -54,15 +54,14 @@ export class DeliveryController {
           HTTP_STATUS.BAD_REQUEST
         );        
       }
-
+      
       const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      if(limit !== undefined && (!Number.isInteger(limit) || limit < 1 )){
+      if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 200)) {
           throw new AppError(
-              'Invalid limit',
-              HTTP_STATUS.BAD_REQUEST
+              'Invalid limit. Must be an integer between 1 and 200',
+              HTTP_STATUS.BAD_REQUEST,
           );
       }
-
 
       const records =
         await this.repository.findByUserAndTenantFiltered(
@@ -83,16 +82,23 @@ export class DeliveryController {
     }
   };
 
-  getDeliverySummary = async (req: Request, res: Response, next: NextFunction) : Promise<void> =>{
+  
+  getDeliverySummary = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const {user_id, tenant_id} = req.user!;
-      const groupSrvRecords = await this.repository.getSummaryByUserAndTenant(user_id, tenant_id);
-      
-      sendSuccess(res, groupSrvRecords, 'Delivery summary retrieved successfully', HTTP_STATUS.OK);
-    } catch (error){
-      next(error)
+        const { user_id, tenant_id } = req.user!;
+        const targetUserId = req.user!.role === 'admin' && req.query.userId
+            ? req.query.userId as string
+            : user_id;
+
+        const result = await this.repository.getSummaryByUserAndTenant(
+            targetUserId,
+            tenant_id,
+        );
+        sendSuccess(res, result, 'Delivery summary retrieved successfully', HTTP_STATUS.OK);
+    } catch (error) {
+        next(error);
     }
-  }
+  };
 
   getDeliveryHistoryByEvent = async (
     req: Request,

@@ -25,6 +25,7 @@ export interface OrchestrationJob {
     eventType: string;
     userId: string;
     tenantId: string;
+    productLine: string;
     payload: Record<string, unknown>;
     correlationId: string;
 }

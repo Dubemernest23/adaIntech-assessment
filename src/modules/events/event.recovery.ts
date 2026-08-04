@@ -36,6 +36,7 @@ export const recoverOrphanedEvents = async (): Promise<void> => {
                 userId: event.userId,
                 tenantId: event.tenantId,
                 payload: event.payload,
+                productLine: event.productLine,
                 correlationId: 'startup-recovery',
                 },
                 { jobId: `orchestrate-${event.eventId}` },
