@@ -271,5 +271,30 @@ describe('Delivery API — D3', () => {
                 }),
             );
         });
+        it('should allow admin to query summary by userId', async () => {
+            mockGroupBy.mockResolvedValue([]);
+
+            await request(app)
+                .get('/api/v1/delivery/summary?userId=user-999')
+                .set('Authorization', `Bearer ${adminToken}`);
+
+            expect(mockGroupBy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ userId: 'user-999' }),
+                }),
+            );
+        });
+
+        it('should ignore userId param for non-admin users on summary', async () => {
+            mockGroupBy.mockResolvedValue([]);
+
+            await request(app)
+                .get('/api/v1/delivery/summary?userId=user-999')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+
+            const callArgs = (mockGroupBy.mock.calls[0][0] as any).where;
+            expect(callArgs.userId).toBe('user-001');
+            expect(callArgs.userId).not.toBe('user-999');
+        });
     });
 });

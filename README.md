@@ -123,6 +123,9 @@ npm run dev
 
 Tests run entirely in-memory — no running database or Redis instance is required, with the exception of `category-mapping.unique.test.ts` which requires a live Postgres instance to prove partial unique index enforcement at the database level.
 
+# To include the database-level uniqueness integration test, set REAL_DATABASE_URL in .env:
+REAL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/abp_notifications
+
 ```bash
 # Run all tests (serial, ensures clean exit)
 npm test -- --runInBand

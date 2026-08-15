@@ -33,11 +33,14 @@ jest.mock('../shared/queues/queue.config', () => ({
 }));
 
 afterAll(async () => {
-  try {
-
-    const { digestQueue, dlqQueue } = await import('../shared/queues/queue.config');
-    await Promise.allSettled([digestQueue.close(), dlqQueue.close()]);
-  } catch {
-    // Queues were never instantiated – nothing to close.
-  }
+    try {
+        const { digestQueue, dlqQueue, orchestrationQueue } = await import('../shared/queues/queue.config');
+        await Promise.allSettled([
+            digestQueue.close(),
+            dlqQueue.close(),
+            orchestrationQueue.close(),
+        ]);
+    } catch {
+        // Queues were never instantiated — nothing to close.
+    }
 });

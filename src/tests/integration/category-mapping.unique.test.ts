@@ -1,16 +1,16 @@
 
-process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/abp_notifications';
-process.env.DEBUG = '';
+const realDbUrl = process.env.REAL_DATABASE_URL;
+const describeIfDb = realDbUrl ? describe : describe.skip;
 
 import { prisma } from '../../database/prisma.client';
 
-describe('CategoryMapping database uniqueness', () => {
+describeIfDb('CategoryMapping database uniqueness', () => {
     afterAll(async () => {
         await prisma.$disconnect();
     });
 
     it('rejects duplicate default mappings for the same eventType', async () => {
-        const eventType = 'transaction_created' as const
+        const eventType = 'category.mapping.unique.default'
 
         await prisma.categoryMapping.deleteMany({ where: { eventType } });
 
