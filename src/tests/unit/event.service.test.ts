@@ -44,6 +44,7 @@ const savedEvent = {
   eventType: testEvent.eventType,
   tenantId: testEvent.tenantId,
   userId: testEvent.userId,
+  productLine: testEvent.productLine,
   payload: testEvent.payload,
   orchestrationStatus: 'PENDING',
 };
@@ -69,7 +70,10 @@ describe('EventService — D1 ingestion-to-queue durability', () => {
       expect(mockCreateEvent).toHaveBeenCalledTimes(1);
       expect(mockQueueAdd).toHaveBeenCalledWith(
         'orchestrate-notification',
-        expect.objectContaining({ eventId: testEvent.eventId }),
+        expect.objectContaining({
+          eventId: testEvent.eventId,
+          productLine: testEvent.productLine,
+        }),
         expect.objectContaining({
           jobId: `orchestrate-${testEvent.eventId}`,
         }),
@@ -110,6 +114,11 @@ describe('EventService — D1 ingestion-to-queue durability', () => {
       expect(result.status).toBe('accepted');
       expect(mockCreateEvent).not.toHaveBeenCalled();
       expect(mockQueueAdd).toHaveBeenCalledTimes(1);
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        'orchestrate-notification',
+        expect.objectContaining({ productLine: testEvent.productLine }),
+        expect.anything(),
+      );
       expect(mockUpdateOrchestrationStatus).toHaveBeenCalledWith(
         testEvent.eventId,
         'QUEUED',

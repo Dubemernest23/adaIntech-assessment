@@ -132,6 +132,13 @@ describe('Delivery API — D3', () => {
 
             expect(res.status).toBe(400);
         });
+        // test for invalid to date
+        it('should return 400 for invalid to date', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?to=not-a-date')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
+        });
 
         it('should apply limit query param correctly', async () => {
             mockFindMany.mockResolvedValue([]);
@@ -143,6 +150,22 @@ describe('Delivery API — D3', () => {
             expect(mockFindMany).toHaveBeenCalledWith(
                 expect.objectContaining({ take: 10 }),
             );
+        });
+
+        //test for limit less than 1 returns 400
+        it('should return 400 when limit is less than 1', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?limit=0')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
+        });
+
+        // test for limit more than 200 returns 400
+        it('should return 400 when limit exceeds 200', async () => {
+            const res = await request(app)
+                .get('/api/v1/delivery/history?limit=201')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+            expect(res.status).toBe(400);
         });
 
         it('should allow admin to query by userId', async () => {
@@ -247,6 +270,31 @@ describe('Delivery API — D3', () => {
                     where: expect.objectContaining({ tenantId: 'tenant-001' }),
                 }),
             );
+        });
+        it('should allow admin to query summary by userId', async () => {
+            mockGroupBy.mockResolvedValue([]);
+
+            await request(app)
+                .get('/api/v1/delivery/summary?userId=user-999')
+                .set('Authorization', `Bearer ${adminToken}`);
+
+            expect(mockGroupBy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ userId: 'user-999' }),
+                }),
+            );
+        });
+
+        it('should ignore userId param for non-admin users on summary', async () => {
+            mockGroupBy.mockResolvedValue([]);
+
+            await request(app)
+                .get('/api/v1/delivery/summary?userId=user-999')
+                .set('Authorization', `Bearer ${tenant1Token}`);
+
+            const callArgs = (mockGroupBy.mock.calls[0][0] as any).where;
+            expect(callArgs.userId).toBe('user-001');
+            expect(callArgs.userId).not.toBe('user-999');
         });
     });
 });

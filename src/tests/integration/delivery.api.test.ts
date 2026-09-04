@@ -199,20 +199,18 @@ describe('DeliveryRepository Tenant Isolation', () => {
 
     });
 
-    it('should cap limit at 200', async()=>{
-
+    it('should apply limit when within valid range', async () => {
         mockFindMany.mockResolvedValue([]);
 
         await repository.findByUserAndTenantFiltered(
             'user-001',
             'tenant-001',
-            {
-                limit:500
-            }
+            { limit: 100 },
         );
-        expect(
-            mockFindMany.mock.calls[0][0].take
-        ).toBe(200);
+
+        expect(mockFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({ take: 100 }),
+        );
     });
 
 }); 

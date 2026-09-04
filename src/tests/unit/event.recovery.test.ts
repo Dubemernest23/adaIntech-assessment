@@ -64,6 +64,7 @@ describe('recoverOrphanedEvents', () => {
                 eventType: 'transaction_created',
                 userId: 'user-001',
                 tenantId: 'tenant-001',
+                productLine: 'fintech',
                 payload: {},
             },
         ]);
@@ -73,6 +74,14 @@ describe('recoverOrphanedEvents', () => {
         await recoverOrphanedEvents();
 
         expect(mockQueueAdd).toHaveBeenCalledTimes(1);
+        expect(mockQueueAdd).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                eventId: 'orphan-1',
+                productLine: 'fintech',
+            }),
+            expect.anything(),
+        );
         expect(mockUpdate).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: { eventId: 'orphan-1' },
@@ -93,8 +102,8 @@ describe('recoverOrphanedEvents', () => {
 
         mockFindMany.mockImplementation(({ where }) => {
             const allEvents = [
-            { eventId: 'recovered-1', orchestrationStatus: 'PENDING', userId: 'user-001', tenantId: 'tenant-001', eventType: 'transaction_created', payload: {} },
-            { eventId: 'dlqed-event', orchestrationStatus: 'FAILED', userId: 'user-002', tenantId: 'tenant-001', eventType: 'transaction_created', payload: {} },
+            { eventId: 'recovered-1', orchestrationStatus: 'PENDING', userId: 'user-001', tenantId: 'tenant-001', eventType: 'transaction_created', productLine: 'fintech', payload: {} },
+            { eventId: 'dlqed-event', orchestrationStatus: 'FAILED', userId: 'user-002', tenantId: 'tenant-001', eventType: 'transaction_created', productLine: 'fintech', payload: {} },
             ];
             const allowedStatuses: string[] = where.orchestrationStatus.in;
             return Promise.resolve(
